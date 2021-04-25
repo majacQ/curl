@@ -116,6 +116,7 @@ test936 test937 test938 test939 test940 test941 test942 test943 test944 \
 test945 test946 test947 test948 test949 test950 test951 test952 test953 \
 test954 test955 test956 test957 test958 test959 test960 test961 test962 \
 test963 test964 test965 test966 test967 test968 test969 test970 test971 \
+test972 \
 \
 test1000 test1001 test1002 test1003 test1004 test1005 test1006 test1007 \
 test1008 test1009 test1010 test1011 test1012 test1013 test1014 test1015 \
@@ -202,7 +203,7 @@ test1620 test1621 \
 test1630 test1631 test1632 test1633 test1634 \
 \
 test1650 test1651 test1652 test1653 test1654 test1655 \
-test1660 \
+test1660 test1661 \
 \
 test1700 test1701 test1702 test1703 \
 \

@@ -286,6 +286,8 @@ struct ssl_config_data {
   BIT(revoke_best_effort); /* ignore SSL revocation offline/missing revocation
                               list errors */
   BIT(native_ca_store); /* use the native ca store of operating system */
+  BIT(auto_client_cert);   /* automatically locate and use a client
+                              certificate for authentication (Schannel) */
 };
 
 struct ssl_general_config {
@@ -1664,7 +1666,7 @@ struct UserDefined {
   curl_conv_callback convtonetwork;
   /* function to convert from UTF-8 encoding: */
   curl_conv_callback convfromutf8;
-#ifdef USE_HSTS
+#ifndef CURL_DISABLE_HSTS
   curl_hstsread_callback hsts_read;
   void *hsts_read_userp;
   curl_hstswrite_callback hsts_write;
@@ -1926,7 +1928,7 @@ struct Curl_easy {
                                   NOTE that the 'cookie' field in the
                                   UserDefined struct defines if the "engine"
                                   is to be used or not. */
-#ifdef USE_HSTS
+#ifndef CURL_DISABLE_HSTS
   struct hsts *hsts;
 #endif
 #ifndef CURL_DISABLE_ALTSVC

@@ -426,6 +426,8 @@ CURLcode Curl_vsetopt(struct Curl_easy *data, CURLoption option, va_list param)
       version_max = C_SSLVERSION_MAX_VALUE(arg);
 
       if(version < CURL_SSLVERSION_DEFAULT ||
+         version == CURL_SSLVERSION_SSLv2 ||
+         version == CURL_SSLVERSION_SSLv3 ||
          version >= CURL_SSLVERSION_LAST ||
          version_max < CURL_SSLVERSION_MAX_NONE ||
          version_max >= CURL_SSLVERSION_MAX_LAST)
@@ -811,7 +813,7 @@ CURLcode Curl_vsetopt(struct Curl_easy *data, CURLoption option, va_list param)
   case CURLOPT_COOKIELIST:
     argptr = va_arg(param, char *);
 
-    if(argptr == NULL)
+    if(!argptr)
       break;
 
     if(strcasecompare(argptr, "ALL")) {
@@ -2288,6 +2290,7 @@ CURLcode Curl_vsetopt(struct Curl_easy *data, CURLoption option, va_list param)
     data->set.ssl.no_partialchain = !!(arg & CURLSSLOPT_NO_PARTIALCHAIN);
     data->set.ssl.revoke_best_effort = !!(arg & CURLSSLOPT_REVOKE_BEST_EFFORT);
     data->set.ssl.native_ca_store = !!(arg & CURLSSLOPT_NATIVE_CA);
+    data->set.ssl.auto_client_cert = !!(arg & CURLSSLOPT_AUTO_CLIENT_CERT);
     /* If a setting is added here it should also be added in dohprobe()
        which sets its own CURLOPT_SSL_OPTIONS based on these settings. */
     break;
@@ -2299,9 +2302,11 @@ CURLcode Curl_vsetopt(struct Curl_easy *data, CURLoption option, va_list param)
       (bool)((arg&CURLSSLOPT_ALLOW_BEAST) ? TRUE : FALSE);
     data->set.proxy_ssl.no_revoke = !!(arg & CURLSSLOPT_NO_REVOKE);
     data->set.proxy_ssl.no_partialchain = !!(arg & CURLSSLOPT_NO_PARTIALCHAIN);
-    data->set.proxy_ssl.native_ca_store = !!(arg & CURLSSLOPT_NATIVE_CA);
     data->set.proxy_ssl.revoke_best_effort =
       !!(arg & CURLSSLOPT_REVOKE_BEST_EFFORT);
+    data->set.proxy_ssl.native_ca_store = !!(arg & CURLSSLOPT_NATIVE_CA);
+    data->set.proxy_ssl.auto_client_cert =
+      !!(arg & CURLSSLOPT_AUTO_CLIENT_CERT);
     break;
 #endif
 
@@ -2909,7 +2914,7 @@ CURLcode Curl_vsetopt(struct Curl_easy *data, CURLoption option, va_list param)
     data->set.trailer_data = va_arg(param, void *);
 #endif
     break;
-#ifdef USE_HSTS
+#ifndef CURL_DISABLE_HSTS
   case CURLOPT_HSTSREADFUNCTION:
     data->set.hsts_read = va_arg(param, curl_hstsread_callback);
     break;

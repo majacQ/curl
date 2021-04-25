@@ -117,6 +117,10 @@
 #define SP_PROT_TLS1_2_CLIENT           0x00000800
 #endif
 
+#ifndef SCH_USE_STRONG_CRYPTO
+#define SCH_USE_STRONG_CRYPTO           0x00400000
+#endif
+
 #ifndef SECBUFFER_ALERT
 #define SECBUFFER_ALERT                 17
 #endif
@@ -335,6 +339,11 @@ set_ssl_ciphers(SCHANNEL_CRED *schannel_cred, char *ciphers)
       alg = get_alg_id_by_name(startCur);
     if(alg)
       algIds[algCount++] = alg;
+    else if(!strncmp(startCur, "USE_STRONG_CRYPTO",
+                     sizeof("USE_STRONG_CRYPTO") - 1) ||
+            !strncmp(startCur, "SCH_USE_STRONG_CRYPTO",
+                     sizeof("SCH_USE_STRONG_CRYPTO") - 1))
+      schannel_cred->dwFlags |= SCH_USE_STRONG_CRYPTO;
     else
       return CURLE_SSL_CIPHER;
     startCur = strchr(startCur, ':');
@@ -358,7 +367,7 @@ get_cert_location(TCHAR *path, DWORD *store_name, TCHAR **store_path,
   size_t store_name_len;
 
   sep = _tcschr(path, TEXT('\\'));
-  if(sep == NULL)
+  if(!sep)
     return CURLE_SSL_CERTPROBLEM;
 
   store_name_len = sep - path;
@@ -388,7 +397,7 @@ get_cert_location(TCHAR *path, DWORD *store_name, TCHAR **store_path,
   store_path_start = sep + 1;
 
   sep = _tcschr(store_path_start, TEXT('\\'));
-  if(sep == NULL)
+  if(!sep)
     return CURLE_SSL_CERTPROBLEM;
 
   *thumbprint = sep + 1;
@@ -398,7 +407,7 @@ get_cert_location(TCHAR *path, DWORD *store_name, TCHAR **store_path,
   *sep = TEXT('\0');
   *store_path = _tcsdup(store_path_start);
   *sep = TEXT('\\');
-  if(*store_path == NULL)
+  if(!*store_path)
     return CURLE_OUT_OF_MEMORY;
 
   return CURLE_OK;
@@ -428,12 +437,7 @@ schannel_connect_step1(struct Curl_easy *data, struct connectdata *conn,
 #endif
   TCHAR *host_name;
   CURLcode result;
-#ifndef CURL_DISABLE_PROXY
-  char * const hostname = SSL_IS_PROXY() ? conn->http_proxy.host.name :
-    conn->host.name;
-#else
-  char * const hostname = conn->host.name;
-#endif
+  char * const hostname = SSL_HOST_NAME();
 
   DEBUGF(infof(data,
                "schannel: SSL/TLS connection with %s port %hu (step 1/3)\n",
@@ -558,6 +562,20 @@ schannel_connect_step1(struct Curl_easy *data, struct connectdata *conn,
                    "names in server certificates.\n"));
     }
 
+    /* security request flags */
+    BACKEND->req_flags = ISC_REQ_SEQUENCE_DETECT | ISC_REQ_REPLAY_DETECT |
+      ISC_REQ_CONFIDENTIALITY | ISC_REQ_ALLOCATE_MEMORY |
+      ISC_REQ_STREAM;
+
+    if(!SSL_SET_OPTION(auto_client_cert)) {
+      schannel_cred.dwFlags &= ~SCH_CRED_USE_DEFAULT_CREDS;
+      schannel_cred.dwFlags |= SCH_CRED_NO_DEFAULT_CREDS;
+      BACKEND->req_flags |= ISC_REQ_USE_SUPPLIED_CREDS;
+      infof(data, "schannel: disabled automatic use of client certificate\n");
+    }
+    else
+      infof(data, "schannel: enabled automatic use of client certificate\n");
+
     switch(conn->ssl_config.version) {
     case CURL_SSLVERSION_DEFAULT:
     case CURL_SSLVERSION_TLSv1:
@@ -572,11 +590,9 @@ schannel_connect_step1(struct Curl_easy *data, struct connectdata *conn,
       break;
     }
     case CURL_SSLVERSION_SSLv3:
-      schannel_cred.grbitEnabledProtocols = SP_PROT_SSL3_CLIENT;
-      break;
     case CURL_SSLVERSION_SSLv2:
-      schannel_cred.grbitEnabledProtocols = SP_PROT_SSL2_CLIENT;
-      break;
+      failf(data, "SSL versions not supported");
+      return CURLE_NOT_BUILT_IN;
     default:
       failf(data, "Unrecognized parameter passed via CURLOPT_SSLVERSION");
       return CURLE_SSL_CONNECT_ERROR;
@@ -700,7 +716,7 @@ schannel_connect_step1(struct Curl_easy *data, struct connectdata *conn,
         }
         if(!blob)
           free(certdata);
-        if(cert_store == NULL) {
+        if(!cert_store) {
           DWORD errorcode = GetLastError();
           if(errorcode == ERROR_INVALID_PASSWORD)
             failf(data, "schannel: Failed to import cert file %s, "
@@ -717,7 +733,7 @@ schannel_connect_step1(struct Curl_easy *data, struct connectdata *conn,
           cert_store, X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, 0,
           CERT_FIND_ANY, NULL, NULL);
 
-        if(client_certs[0] == NULL) {
+        if(!client_certs[0]) {
           failf(data, "schannel: Failed to get certificate from file %s"
                 ", last error is 0x%x",
                 cert_showfilename_error, GetLastError());
@@ -893,11 +909,6 @@ schannel_connect_step1(struct Curl_easy *data, struct connectdata *conn,
   InitSecBuffer(&outbuf, SECBUFFER_EMPTY, NULL, 0);
   InitSecBufferDesc(&outbuf_desc, &outbuf, 1);
 
-  /* setup request flags */
-  BACKEND->req_flags = ISC_REQ_SEQUENCE_DETECT | ISC_REQ_REPLAY_DETECT |
-    ISC_REQ_CONFIDENTIALITY | ISC_REQ_ALLOCATE_MEMORY |
-    ISC_REQ_STREAM;
-
   /* allocate memory for the security context handle */
   BACKEND->ctxt = (struct Curl_schannel_ctxt *)
     calloc(1, sizeof(struct Curl_schannel_ctxt));
@@ -997,12 +1008,7 @@ schannel_connect_step2(struct Curl_easy *data, struct connectdata *conn,
   SECURITY_STATUS sspi_status = SEC_E_OK;
   CURLcode result;
   bool doread;
-#ifndef CURL_DISABLE_PROXY
-  char * const hostname = SSL_IS_PROXY() ? conn->http_proxy.host.name :
-    conn->host.name;
-#else
-  char * const hostname = conn->host.name;
-#endif
+  char * const hostname = SSL_HOST_NAME();
   const char *pubkey_ptr;
 
   doread = (connssl->connecting_state != ssl_connect_2_writing) ? TRUE : FALSE;
@@ -1015,23 +1021,23 @@ schannel_connect_step2(struct Curl_easy *data, struct connectdata *conn,
     return CURLE_SSL_CONNECT_ERROR;
 
   /* buffer to store previously received and decrypted data */
-  if(BACKEND->decdata_buffer == NULL) {
+  if(!BACKEND->decdata_buffer) {
     BACKEND->decdata_offset = 0;
     BACKEND->decdata_length = CURL_SCHANNEL_BUFFER_INIT_SIZE;
     BACKEND->decdata_buffer = malloc(BACKEND->decdata_length);
-    if(BACKEND->decdata_buffer == NULL) {
+    if(!BACKEND->decdata_buffer) {
       failf(data, "schannel: unable to allocate memory");
       return CURLE_OUT_OF_MEMORY;
     }
   }
 
   /* buffer to store previously received and encrypted data */
-  if(BACKEND->encdata_buffer == NULL) {
+  if(!BACKEND->encdata_buffer) {
     BACKEND->encdata_is_incomplete = false;
     BACKEND->encdata_offset = 0;
     BACKEND->encdata_length = CURL_SCHANNEL_BUFFER_INIT_SIZE;
     BACKEND->encdata_buffer = malloc(BACKEND->encdata_length);
-    if(BACKEND->encdata_buffer == NULL) {
+    if(!BACKEND->encdata_buffer) {
       failf(data, "schannel: unable to allocate memory");
       return CURLE_OUT_OF_MEMORY;
     }
@@ -1046,7 +1052,7 @@ schannel_connect_step2(struct Curl_easy *data, struct connectdata *conn,
     reallocated_buffer = realloc(BACKEND->encdata_buffer,
                                  reallocated_length);
 
-    if(reallocated_buffer == NULL) {
+    if(!reallocated_buffer) {
       failf(data, "schannel: unable to re-allocate memory");
       return CURLE_OUT_OF_MEMORY;
     }
@@ -1101,7 +1107,7 @@ schannel_connect_step2(struct Curl_easy *data, struct connectdata *conn,
     InitSecBuffer(&outbuf[2], SECBUFFER_EMPTY, NULL, 0);
     InitSecBufferDesc(&outbuf_desc, outbuf, 3);
 
-    if(inbuf[0].pvBuffer == NULL) {
+    if(!inbuf[0].pvBuffer) {
       failf(data, "schannel: unable to allocate memory");
       return CURLE_OUT_OF_MEMORY;
     }
@@ -1251,9 +1257,7 @@ schannel_connect_step2(struct Curl_easy *data, struct connectdata *conn,
     DEBUGF(infof(data, "schannel: SSL/TLS handshake complete\n"));
   }
 
-  pubkey_ptr = SSL_IS_PROXY() ?
-    data->set.str[STRING_SSL_PINNEDPUBLICKEY_PROXY] :
-    data->set.str[STRING_SSL_PINNEDPUBLICKEY];
+  pubkey_ptr = SSL_PINNED_PUB_KEY();
   if(pubkey_ptr) {
     result = pkp_pin_peer_pubkey(data, conn, sockindex, pubkey_ptr);
     if(result) {
@@ -1340,8 +1344,7 @@ schannel_connect_step3(struct Curl_easy *data, struct connectdata *conn,
   CERT_CONTEXT *ccert_context = NULL;
   bool isproxy = SSL_IS_PROXY();
 #ifdef DEBUGBUILD
-  const char * const hostname = isproxy ? conn->http_proxy.host.name :
-    conn->host.name;
+  const char * const hostname = SSL_HOST_NAME();
 #endif
 #ifdef HAS_ALPN
   SecPkgContext_ApplicationProtocol alpn_result;
@@ -1453,7 +1456,7 @@ schannel_connect_step3(struct Curl_easy *data, struct connectdata *conn,
                                        SECPKG_ATTR_REMOTE_CERT_CONTEXT,
                                        &ccert_context);
 
-    if((sspi_status != SEC_E_OK) || (ccert_context == NULL)) {
+    if((sspi_status != SEC_E_OK) || !ccert_context) {
       failf(data, "schannel: failed to retrieve remote cert context");
       return CURLE_PEER_FAILED_VERIFICATION;
     }
@@ -1805,7 +1808,7 @@ schannel_recv(struct Curl_easy *data, int sockindex,
       }
       reallocated_buffer = realloc(BACKEND->encdata_buffer,
                                    reallocated_length);
-      if(reallocated_buffer == NULL) {
+      if(!reallocated_buffer) {
         *err = CURLE_OUT_OF_MEMORY;
         failf(data, "schannel: unable to re-allocate memory");
         goto cleanup;
@@ -1894,7 +1897,7 @@ schannel_recv(struct Curl_easy *data, int sockindex,
           }
           reallocated_buffer = realloc(BACKEND->decdata_buffer,
                                        reallocated_length);
-          if(reallocated_buffer == NULL) {
+          if(!reallocated_buffer) {
             *err = CURLE_OUT_OF_MEMORY;
             failf(data, "schannel: unable to re-allocate memory");
             goto cleanup;
@@ -2128,12 +2131,7 @@ static int schannel_shutdown(struct Curl_easy *data, struct connectdata *conn,
    * Shutting Down an Schannel Connection
    */
   struct ssl_connect_data *connssl = &conn->ssl[sockindex];
-#ifndef CURL_DISABLE_PROXY
-  char * const hostname = SSL_IS_PROXY() ? conn->http_proxy.host.name :
-    conn->host.name;
-#else
-  char * const hostname = conn->host.name;
-#endif
+  char * const hostname = SSL_HOST_NAME();
 
   DEBUGASSERT(data);
 
@@ -2296,7 +2294,7 @@ static CURLcode pkp_pin_peer_pubkey(struct Curl_easy *data,
                                        SECPKG_ATTR_REMOTE_CERT_CONTEXT,
                                        &pCertContextServer);
 
-    if((sspi_status != SEC_E_OK) || (pCertContextServer == NULL)) {
+    if((sspi_status != SEC_E_OK) || !pCertContextServer) {
       char buffer[STRERROR_LEN];
       failf(data, "schannel: Failed to read remote certificate context: %s",
             Curl_sspi_strerror(sspi_status, buffer, sizeof(buffer)));
