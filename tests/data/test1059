@@ -14,7 +14,7 @@ FAILURE
 <reply>
 <connect>
 HTTP/1.1 501 Method not implemented swsclose
-Date: Thu, 09 Nov 2010 14:49:00 GMT
+Date: Tue, 09 Nov 2010 14:49:00 GMT
 Connection: close
 Content-Length: 0
 
@@ -46,12 +46,10 @@ ftp://test-number:1059/wanted/page -p -x %HOSTIP:%HTTPPORT
 <errorcode>
 56
 </errorcode>
-<strip>
-^User-Agent:.*
-</strip>
 <protocol>
 CONNECT test-number:1059 HTTP/1.1
 Host: test-number:1059
+User-Agent: curl/%VERSION
 Proxy-Connection: Keep-Alive
 
 </protocol>

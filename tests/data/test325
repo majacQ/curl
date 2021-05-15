@@ -12,7 +12,7 @@ HTTP GET
 <reply>
 <data>
 HTTP/1.1 301 OK
-Date: Thu, 09 Nov 2010 14:49:00 GMT
+Date: Tue, 09 Nov 2010 14:49:00 GMT
 Server: test-server/fake
 Content-Length: 7
 Location: http://somewhere/325
@@ -21,7 +21,7 @@ MooMoo
 </data>
 <datacheck>
 HTTP/1.1 301 OK
-Date: Thu, 09 Nov 2010 14:49:00 GMT
+Date: Tue, 09 Nov 2010 14:49:00 GMT
 Server: test-server/fake
 Content-Length: 7
 Location: http://somewhere/325
@@ -49,12 +49,10 @@ HTTPS with attempted redirect to denied HTTP
 #
 # Verify data after the test has been "shot"
 <verify>
-<strip>
-^User-Agent:.*
-</strip>
 <protocol>
 GET /325 HTTP/1.1
 Host: %HOSTIP:%HTTPSPORT
+User-Agent: curl/%VERSION
 Accept: */*
 
 </protocol>

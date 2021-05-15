@@ -22,7 +22,7 @@ Connection: close
 </data>
 <data2>
 HTTP/1.1 200 OK swsclose
-Date: Thu, 09 Nov 2010 14:49:00 GMT
+Date: Tue, 09 Nov 2010 14:49:00 GMT
 Server: test-server/fake
 Content-Length: 11
 Connection: close
@@ -39,7 +39,7 @@ Content-Length: 0
 Connection: close
 
 HTTP/1.1 200 OK swsclose
-Date: Thu, 09 Nov 2010 14:49:00 GMT
+Date: Tue, 09 Nov 2010 14:49:00 GMT
 Server: test-server/fake
 Content-Length: 11
 Connection: close
@@ -71,12 +71,12 @@ bar
 # Verify data after the test has been "shot"
 <verify>
 <strip>
-^(User-Agent:|Content-Type: multipart/form-data;|------------).*
+^(Content-Type: multipart/form-data;|------------).*
 </strip>
 <protocol>
 POST /we/want/1053 HTTP/1.1
-User-Agent: curl/7.18.2 (i686-pc-linux-gnu) libcurl/7.18.2 OpenSSL/0.9.7a ipv6 zlib/1.1.4
 Host: %HOSTIP:%HTTPPORT
+User-Agent: curl/%VERSION
 Accept: */*
 Content-Length: 410
 Content-Type: multipart/form-data; boundary=----------------------------9ef8d6205763
@@ -99,8 +99,8 @@ bar
 
 ------------------------------9ef8d6205763--
 POST /we/want/data/10530002.txt?coolsite=yes HTTP/1.1
-User-Agent: curl/7.18.2 (i686-pc-linux-gnu) libcurl/7.18.2 OpenSSL/0.9.7a ipv6 zlib/1.1.4
 Host: %HOSTIP:%HTTPPORT
+User-Agent: curl/%VERSION
 Accept: */*
 Content-Length: 410
 Content-Type: multipart/form-data; boundary=----------------------------9ef8d6205763

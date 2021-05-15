@@ -9,7 +9,7 @@
 #
 # This software is licensed as described in the file COPYING, which
 # you should have received as part of this distribution. The terms
-# are also available at https://curl.haxx.se/docs/copyright.html.
+# are also available at https://curl.se/docs/copyright.html.
 #
 # You may opt to use, copy, modify, merge, publish, distribute and/or sell
 # copies of the Software, and permit persons to whom the Software is
@@ -30,7 +30,8 @@ CURLX_SRCS = \
  ../../lib/warnless.c \
  ../../lib/curl_ctype.c \
  ../../lib/dynbuf.c \
- ../../lib/strdup.c
+ ../../lib/strdup.c \
+ ../../lib/curl_multibyte.c
 
 CURLX_HDRS = \
  ../../lib/curlx.h \
@@ -39,7 +40,8 @@ CURLX_HDRS = \
  ../../lib/warnless.h \
  ../../lib/curl_ctype.h \
  ../../lib/dynbuf.h \
- ../../lib/strdup.h
+ ../../lib/strdup.h \
+ ../../lib/curl_multibyte.h
 
 USEFUL = \
  getpart.c \

@@ -13,7 +13,7 @@ followlocation
 <reply>
 <data nocheck="yes">
 HTTP/1.1 302 OK swsbounce swsclose
-Date: Thu, 09 Nov 2010 14:49:00 GMT
+Date: Tue, 09 Nov 2010 14:49:00 GMT
 Content-Length: 8
 Connection: close
 Content-Type: text/plain
@@ -23,7 +23,7 @@ monster
 </data>
 <data1 nocheck="yes">
 HTTP/1.1 200 OK
-Date: Thu, 09 Nov 2010 14:49:00 GMT
+Date: Tue, 09 Nov 2010 14:49:00 GMT
 Content-Length: 15
 Connection: close
 Content-Type: text/plain; charset=us-ascii
@@ -50,30 +50,29 @@ http://%HOSTIP:%HTTPPORT/1089 -w "%{num_connects}\n%{num_redirects}\n%{size_down
 #
 # Verify data after the test has been "shot"
 <verify>
-<strip>
-^User-Agent:.*
-</strip>
 <protocol>
 GET /1089 HTTP/1.1
 Host: %HOSTIP:%HTTPPORT
+User-Agent: curl/%VERSION
 Accept: */*
 
 GET /10890001 HTTP/1.1
 Host: %HOSTIP:%HTTPPORT
+User-Agent: curl/%VERSION
 Accept: */*
 
 </protocol>
 
 <stdout>
 HTTP/1.1 302 OK swsbounce swsclose
-Date: Thu, 09 Nov 2010 14:49:00 GMT
+Date: Tue, 09 Nov 2010 14:49:00 GMT
 Content-Length: 8
 Connection: close
 Content-Type: text/plain
 Location: ./10890001
 
 HTTP/1.1 200 OK
-Date: Thu, 09 Nov 2010 14:49:00 GMT
+Date: Tue, 09 Nov 2010 14:49:00 GMT
 Content-Length: 15
 Connection: close
 Content-Type: text/plain; charset=us-ascii

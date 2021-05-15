@@ -14,7 +14,7 @@ proxytunnel
 <reply>
 <data>
 HTTP/1.1 200 OK
-Date: Thu, 09 Nov 2010 14:49:00 GMT
+Date: Tue, 09 Nov 2010 14:49:00 GMT
 Server: test-server/fake swsclose
 Content-Type: text/html
 Funny-head: yesyes
@@ -30,7 +30,7 @@ HTTP/1.1 204 Sure go ahead
 HTTP/1.1 204 Sure go ahead
 
 HTTP/1.1 200 OK
-Date: Thu, 09 Nov 2010 14:49:00 GMT
+Date: Tue, 09 Nov 2010 14:49:00 GMT
 Server: test-server/fake swsclose
 Content-Type: text/html
 Funny-head: yesyes
@@ -61,20 +61,17 @@ proxy
 #
 # Verify data after the test has been "shot"
 <verify>
-<strip>
-^User-Agent:.*
-</strip>
 <proxy>
 CONNECT test.1904:%HTTPPORT HTTP/1.1
 Host: test.1904:%HTTPPORT
-User-Agent: curl/7.10.7-pre2 (i686-pc-linux-gnu) libcurl/7.10.7-pre2 OpenSSL/0.9.7a zlib/1.1.3
+User-Agent: curl/%VERSION
 Proxy-Connection: Keep-Alive
 
 </proxy>
 <protocol>
 GET /we/want/that/page/1904 HTTP/1.1
 Host: test.1904:%HTTPPORT
-User-Agent: curl/7.10.7-pre2 (i686-pc-linux-gnu) libcurl/7.10.7-pre2 OpenSSL/0.9.7a zlib/1.1.3
+User-Agent: curl/%VERSION
 Accept: */*
 
 </protocol>

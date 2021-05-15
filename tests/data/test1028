@@ -15,7 +15,7 @@ FILE
 <reply>
 <data1>
 HTTP/1.1 302 OK
-Date: Thu, 09 Nov 2010 14:49:00 GMT
+Date: Tue, 09 Nov 2010 14:49:00 GMT
 Server: test-server/fake swsclose
 Content-Type: text/html
 Funny-head: yesyes
@@ -52,12 +52,10 @@ http://%HOSTIP:%HTTPPORT/10280001 -L
 #
 # Verify data after the test has been "shot"
 <verify>
-<strip>
-^User-Agent:.*
-</strip>
 <protocol>
 GET /10280001 HTTP/1.1
 Host: %HOSTIP:%HTTPPORT
+User-Agent: curl/%VERSION
 Accept: */*
 
 USER anonymous
@@ -71,7 +69,7 @@ QUIT
 </protocol>
 <stdout>
 HTTP/1.1 302 OK
-Date: Thu, 09 Nov 2010 14:49:00 GMT
+Date: Tue, 09 Nov 2010 14:49:00 GMT
 Server: test-server/fake swsclose
 Content-Type: text/html
 Funny-head: yesyes

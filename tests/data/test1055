@@ -15,7 +15,7 @@ STOR
 <reply>
 <data>
 HTTP/1.1 307 OK
-Date: Thu, 09 Nov 2010 14:49:00 GMT
+Date: Tue, 09 Nov 2010 14:49:00 GMT
 Server: test-server/fake swsclose
 Content-Type: text/html
 Location: ftp://%HOSTIP:%FTPPORT/1055
@@ -54,12 +54,10 @@ the
 #
 # Verify data after the test has been "shot"
 <verify>
-<strip>
-^User-Agent:.*
-</strip>
 <protocol>
 PUT /1055 HTTP/1.1
 Host: %HOSTIP:%HTTPPORT
+User-Agent: curl/%VERSION
 Accept: */*
 Content-Length: 78
 Expect: 100-continue

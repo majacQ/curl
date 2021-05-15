@@ -12,7 +12,7 @@ noproxy
 <reply>
 <data>
 HTTP/1.1 200 OK
-Date: Thu, 09 Nov 2010 14:49:00 GMT
+Date: Tue, 09 Nov 2010 14:49:00 GMT
 Server: test-server/fake
 Content-Length: 4
 Content-Type: text/html
@@ -37,13 +37,11 @@ http://user:secret@%HOSTIP:%HTTPPORT/ulion/1212 --socks5 non-existing-host.haxx.
 
 # Verify data after the test has been "shot"
 <verify>
-<strip>
-^User-Agent:.*
-</strip>
 <protocol>
 GET /ulion/1212 HTTP/1.1
 Host: %HOSTIP:%HTTPPORT
 Authorization: Basic dXNlcjpzZWNyZXQ=
+User-Agent: curl/%VERSION
 Accept: */*
 
 </protocol>
