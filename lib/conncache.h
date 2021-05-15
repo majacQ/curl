@@ -12,7 +12,7 @@
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -29,8 +29,12 @@
  * be shared.
  */
 
+#include "timeval.h"
+
+struct connectdata;
+
 struct conncache {
-  struct curl_hash hash;
+  struct Curl_hash hash;
   size_t num_conn;
   long next_connection_id;
   struct curltime last_cleanup;
@@ -45,17 +49,24 @@ struct conncache {
 #ifdef CURLDEBUG
 /* the debug versions of these macros make extra certain that the lock is
    never doubly locked or unlocked */
-#define CONNCACHE_LOCK(x) if((x)->share) {                              \
-    Curl_share_lock((x), CURL_LOCK_DATA_CONNECT, CURL_LOCK_ACCESS_SINGLE); \
-    DEBUGASSERT(!(x)->state.conncache_lock);                            \
-    (x)->state.conncache_lock = TRUE;                                   \
-  }
+#define CONNCACHE_LOCK(x)                                               \
+  do {                                                                  \
+    if((x)->share) {                                                    \
+      Curl_share_lock((x), CURL_LOCK_DATA_CONNECT,                      \
+                      CURL_LOCK_ACCESS_SINGLE);                         \
+      DEBUGASSERT(!(x)->state.conncache_lock);                          \
+      (x)->state.conncache_lock = TRUE;                                 \
+    }                                                                   \
+  } while(0)
 
-#define CONNCACHE_UNLOCK(x) if((x)->share) {                            \
-    DEBUGASSERT((x)->state.conncache_lock);                             \
-    (x)->state.conncache_lock = FALSE;                                  \
-    Curl_share_unlock((x), CURL_LOCK_DATA_CONNECT);                     \
-  }
+#define CONNCACHE_UNLOCK(x)                                             \
+  do {                                                                  \
+    if((x)->share) {                                                    \
+      DEBUGASSERT((x)->state.conncache_lock);                           \
+      (x)->state.conncache_lock = FALSE;                                \
+      Curl_share_unlock((x), CURL_LOCK_DATA_CONNECT);                   \
+    }                                                                   \
+  } while(0)
 #else
 #define CONNCACHE_LOCK(x) if((x)->share)                                \
     Curl_share_lock((x), CURL_LOCK_DATA_CONNECT, CURL_LOCK_ACCESS_SINGLE)
@@ -66,7 +77,7 @@ struct conncache {
 struct connectbundle {
   int multiuse;                 /* supports multi-use */
   size_t num_connections;       /* Number of connections in the bundle */
-  struct curl_llist conn_list;  /* The connectdata members of the bundle */
+  struct Curl_llist conn_list;  /* The connectdata members of the bundle */
 };
 
 /* returns 1 on error, 0 is fine */

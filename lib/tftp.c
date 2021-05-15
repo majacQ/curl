@@ -5,11 +5,11 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2020, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) 1998 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -183,6 +183,7 @@ const struct Curl_handler Curl_handler_tftp = {
   ZERO_NULL,                            /* connection_check */
   PORT_TFTP,                            /* defport */
   CURLPROTO_TFTP,                       /* protocol */
+  CURLPROTO_TFTP,                       /* family */
   PROTOPT_NONE | PROTOPT_NOURLQUERY     /* flags */
 };
 
@@ -302,7 +303,7 @@ static unsigned short getrpacketblock(const struct tftp_packet *packet)
   return (unsigned short)((packet->data[2] << 8) | packet->data[3]);
 }
 
-static size_t Curl_strnlen(const char *string, size_t maxlen)
+static size_t tftp_strnlen(const char *string, size_t maxlen)
 {
   const char *end = memchr(string, '\0', maxlen);
   return end ? (size_t) (end - string) : maxlen;
@@ -313,14 +314,14 @@ static const char *tftp_option_get(const char *buf, size_t len,
 {
   size_t loc;
 
-  loc = Curl_strnlen(buf, len);
+  loc = tftp_strnlen(buf, len);
   loc++; /* NULL term */
 
   if(loc >= len)
     return NULL;
   *option = buf;
 
-  loc += Curl_strnlen(buf + loc, len-loc);
+  loc += tftp_strnlen(buf + loc, len-loc);
   loc++; /* NULL term */
 
   if(loc > len)
@@ -487,12 +488,12 @@ static CURLcode tftp_send_first(struct tftp_state_data *state,
        file name so we skip the always-present first letter of the path
        string. */
     result = Curl_urldecode(data, &state->conn->data->state.up.path[1], 0,
-                            &filename, NULL, FALSE);
+                            &filename, NULL, REJECT_ZERO);
     if(result)
       return result;
 
     if(strlen(filename) > (state->blksize - strlen(mode) - 4)) {
-      failf(data, "TFTP file name too long\n");
+      failf(data, "TFTP file name too long");
       free(filename);
       return CURLE_TFTP_ILLEGAL; /* too long file name field */
     }
@@ -1170,7 +1171,7 @@ static CURLcode tftp_receive_packet(struct connectdata *conn)
       char *str = (char *)state->rpacket.data + 4;
       size_t strn = state->rbytes - 4;
       state->error = (tftp_error_t)error;
-      if(Curl_strnlen(str, strn) < strn)
+      if(tftp_strnlen(str, strn) < strn)
         infof(data, "TFTP error: %s\n", str);
       break;
     }

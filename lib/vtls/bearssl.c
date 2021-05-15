@@ -5,11 +5,11 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 2019 - 2020, Michael Forney, <mforney@mforney.org>
+ * Copyright (C) 2019 - 2021, Michael Forney, <mforney@mforney.org>
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -300,8 +300,12 @@ static CURLcode bearssl_connect_step1(struct connectdata *conn, int sockindex)
   struct ssl_connect_data *connssl = &conn->ssl[sockindex];
   struct ssl_backend_data *backend = connssl->backend;
   const char * const ssl_cafile = SSL_CONN_CONFIG(CAfile);
+#ifndef CURL_DISABLE_PROXY
   const char *hostname = SSL_IS_PROXY() ? conn->http_proxy.host.name :
     conn->host.name;
+#else
+  const char *hostname = conn->host.name;
+#endif
   const bool verifypeer = SSL_CONN_CONFIG(verifypeer);
   const bool verifyhost = SSL_CONN_CONFIG(verifyhost);
   CURLcode ret;
@@ -345,8 +349,8 @@ static CURLcode bearssl_connect_step1(struct connectdata *conn, int sockindex)
     ret = load_cafile(ssl_cafile, &backend->anchors, &backend->anchors_len);
     if(ret != CURLE_OK) {
       if(verifypeer) {
-        failf(data, "error setting certificate verify locations:\n"
-              "  CAfile: %s\n", ssl_cafile);
+        failf(data, "error setting certificate verify locations."
+              " CAfile: %s", ssl_cafile);
         return ret;
       }
       infof(data, "error setting certificate verify locations,"
@@ -386,8 +390,11 @@ static CURLcode bearssl_connect_step1(struct connectdata *conn, int sockindex)
      */
 
 #ifdef USE_NGHTTP2
-    if(data->set.httpversion >= CURL_HTTP_VERSION_2 &&
-       (!SSL_IS_PROXY() || !conn->bits.tunnel_proxy)) {
+    if(data->set.httpversion >= CURL_HTTP_VERSION_2
+#ifndef CURL_DISABLE_PROXY
+      && (!SSL_IS_PROXY() || !conn->bits.tunnel_proxy)
+#endif
+      ) {
       backend->protocols[cur++] = NGHTTP2_PROTO_VERSION_ID;
       infof(data, "ALPN, offering %s\n", NGHTTP2_PROTO_VERSION_ID);
     }
@@ -734,21 +741,21 @@ static CURLcode bearssl_connect_common(struct connectdata *conn,
   return CURLE_OK;
 }
 
-static size_t Curl_bearssl_version(char *buffer, size_t size)
+static size_t bearssl_version(char *buffer, size_t size)
 {
   return msnprintf(buffer, size, "BearSSL");
 }
 
-static bool Curl_bearssl_data_pending(const struct connectdata *conn,
-                                      int connindex)
+static bool bearssl_data_pending(const struct connectdata *conn,
+                                 int connindex)
 {
   const struct ssl_connect_data *connssl = &conn->ssl[connindex];
   struct ssl_backend_data *backend = connssl->backend;
   return br_ssl_engine_current_state(&backend->ctx.eng) & BR_SSL_RECVAPP;
 }
 
-static CURLcode Curl_bearssl_random(struct Curl_easy *data UNUSED_PARAM,
-                                    unsigned char *entropy, size_t length)
+static CURLcode bearssl_random(struct Curl_easy *data UNUSED_PARAM,
+                               unsigned char *entropy, size_t length)
 {
   static br_hmac_drbg_context ctx;
   static bool seeded = FALSE;
@@ -767,7 +774,7 @@ static CURLcode Curl_bearssl_random(struct Curl_easy *data UNUSED_PARAM,
   return CURLE_OK;
 }
 
-static CURLcode Curl_bearssl_connect(struct connectdata *conn, int sockindex)
+static CURLcode bearssl_connect(struct connectdata *conn, int sockindex)
 {
   CURLcode ret;
   bool done = FALSE;
@@ -781,20 +788,20 @@ static CURLcode Curl_bearssl_connect(struct connectdata *conn, int sockindex)
   return CURLE_OK;
 }
 
-static CURLcode Curl_bearssl_connect_nonblocking(struct connectdata *conn,
-                                                 int sockindex, bool *done)
+static CURLcode bearssl_connect_nonblocking(struct connectdata *conn,
+                                            int sockindex, bool *done)
 {
   return bearssl_connect_common(conn, sockindex, TRUE, done);
 }
 
-static void *Curl_bearssl_get_internals(struct ssl_connect_data *connssl,
-                                        CURLINFO info UNUSED_PARAM)
+static void *bearssl_get_internals(struct ssl_connect_data *connssl,
+                                   CURLINFO info UNUSED_PARAM)
 {
   struct ssl_backend_data *backend = connssl->backend;
   return &backend->ctx;
 }
 
-static void Curl_bearssl_close(struct connectdata *conn, int sockindex)
+static void bearssl_close(struct connectdata *conn, int sockindex)
 {
   struct ssl_connect_data *connssl = &conn->ssl[sockindex];
   struct ssl_backend_data *backend = connssl->backend;
@@ -809,15 +816,15 @@ static void Curl_bearssl_close(struct connectdata *conn, int sockindex)
   free(backend->anchors);
 }
 
-static void Curl_bearssl_session_free(void *ptr)
+static void bearssl_session_free(void *ptr)
 {
   free(ptr);
 }
 
-static CURLcode Curl_bearssl_md5sum(unsigned char *input,
-                                    size_t inputlen,
-                                    unsigned char *md5sum,
-                                    size_t md5len UNUSED_PARAM)
+static CURLcode bearssl_md5sum(unsigned char *input,
+                               size_t inputlen,
+                               unsigned char *md5sum,
+                               size_t md5len UNUSED_PARAM)
 {
   br_md5_context ctx;
 
@@ -827,10 +834,10 @@ static CURLcode Curl_bearssl_md5sum(unsigned char *input,
   return CURLE_OK;
 }
 
-static CURLcode Curl_bearssl_sha256sum(const unsigned char *input,
-                                       size_t inputlen,
-                                       unsigned char *sha256sum,
-                                       size_t sha256len UNUSED_PARAM)
+static CURLcode bearssl_sha256sum(const unsigned char *input,
+                                  size_t inputlen,
+                                  unsigned char *sha256sum,
+                                  size_t sha256len UNUSED_PARAM)
 {
   br_sha256_context ctx;
 
@@ -847,24 +854,24 @@ const struct Curl_ssl Curl_ssl_bearssl = {
 
   Curl_none_init,
   Curl_none_cleanup,
-  Curl_bearssl_version,
+  bearssl_version,
   Curl_none_check_cxn,
   Curl_none_shutdown,
-  Curl_bearssl_data_pending,
-  Curl_bearssl_random,
+  bearssl_data_pending,
+  bearssl_random,
   Curl_none_cert_status_request,
-  Curl_bearssl_connect,
-  Curl_bearssl_connect_nonblocking,
-  Curl_bearssl_get_internals,
-  Curl_bearssl_close,
+  bearssl_connect,
+  bearssl_connect_nonblocking,
+  bearssl_get_internals,
+  bearssl_close,
   Curl_none_close_all,
-  Curl_bearssl_session_free,
+  bearssl_session_free,
   Curl_none_set_engine,
   Curl_none_set_engine_default,
   Curl_none_engines_list,
   Curl_none_false_start,
-  Curl_bearssl_md5sum,
-  Curl_bearssl_sha256sum
+  bearssl_md5sum,
+  bearssl_sha256sum
 };
 
 #endif /* USE_BEARSSL */

@@ -5,11 +5,11 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 2019 - 2020, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) 2019 - 2021, Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
- * are also available at https://curl.haxx.se/docs/copyright.html.
+ * are also available at https://curl.se/docs/copyright.html.
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -262,7 +262,7 @@ static ssize_t wsftp_send(struct connectdata *conn, int sockindex,
     return -1;
   }
   if(rc < 0) {
-    failf(conn->data, "wolfSSH_SFTP_SendWritePacket returned %d\n", rc);
+    failf(conn->data, "wolfSSH_SFTP_SendWritePacket returned %d", rc);
     return -1;
   }
   DEBUGASSERT(rc == (int)len);
@@ -307,7 +307,7 @@ static ssize_t wsftp_recv(struct connectdata *conn, int sockindex,
   DEBUGASSERT(rc <= (int)len);
 
   if(rc < 0) {
-    failf(conn->data, "wolfSSH_SFTP_SendReadPacket returned %d\n", rc);
+    failf(conn->data, "wolfSSH_SFTP_SendReadPacket returned %d", rc);
     return -1;
   }
   sshc->offset += len;
@@ -322,7 +322,7 @@ static CURLcode wssh_setup_connection(struct connectdata *conn)
 {
   struct SSHPROTO *ssh;
 
-  conn->data->req.protop = ssh = calloc(1, sizeof(struct SSHPROTO));
+  conn->data->req.p.ssh = ssh = calloc(1, sizeof(struct SSHPROTO));
   if(!ssh)
     return CURLE_OUT_OF_MEMORY;
 
@@ -356,7 +356,7 @@ static CURLcode wssh_connect(struct connectdata *conn, bool *done)
   int rc;
 
   /* initialize per-handle data if not already */
-  if(!data->req.protop)
+  if(!data->req.p.ssh)
     wssh_setup_connection(conn);
 
   /* We default to persistent connections. We set this already in this connect
@@ -429,7 +429,7 @@ static CURLcode wssh_statemach_act(struct connectdata *conn, bool *block)
   CURLcode result = CURLE_OK;
   struct ssh_conn *sshc = &conn->proto.sshc;
   struct Curl_easy *data = conn->data;
-  struct SSHPROTO *sftp_scp = data->req.protop;
+  struct SSHPROTO *sftp_scp = data->req.p.ssh;
   WS_SFTPNAME *name;
   int rc = 0;
   *block = FALSE; /* we're not blocking by default */
@@ -583,7 +583,7 @@ static CURLcode wssh_statemach_act(struct connectdata *conn, bool *block)
         /* If we have restart position then open for append */
         flags = WOLFSSH_FXF_WRITE|WOLFSSH_FXF_APPEND;
       else
-        /* Clear file before writing (normal behaviour) */
+        /* Clear file before writing (normal behavior) */
         flags = WOLFSSH_FXF_WRITE|WOLFSSH_FXF_CREAT|WOLFSSH_FXF_TRUNC;
 
       memset(&createattrs, 0, sizeof(createattrs));
@@ -1027,7 +1027,7 @@ static CURLcode wssh_block_statemach(struct connectdata *conn,
 static CURLcode wssh_done(struct connectdata *conn, CURLcode status)
 {
   CURLcode result = CURLE_OK;
-  struct SSHPROTO *sftp_scp = conn->data->req.protop;
+  struct SSHPROTO *sftp_scp = conn->data->req.p.ssh;
 
   if(!status) {
     /* run the state-machine */
