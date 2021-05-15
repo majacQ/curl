@@ -86,6 +86,9 @@ stages:
     - script: make
       displayName: 'make && cd tests && make'
 
+    - script: rm $HOME/.bashrc
+      displayName: 'remove $HOME/.bashrc'
+
     - script: make test-nonflaky
       displayName: 'test'
       env:
