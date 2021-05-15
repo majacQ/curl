@@ -73,10 +73,10 @@ struct pollfd
 #define CURL_CSELECT_IN2 (CURL_CSELECT_ERR << 1)
 
 int Curl_select(curl_socket_t maxfd,
-                fd_set *fds_read,
-                fd_set *fds_write,
-                fd_set *fds_err,
-                time_t timeout_ms);
+                curl_fd_set *fds_read,
+                curl_fd_set *fds_write,
+                curl_fd_set *fds_err,
+                timediff_t timeout_ms);
 
 int Curl_socket_check(curl_socket_t readfd, curl_socket_t readfd2,
                       curl_socket_t writefd,
@@ -86,18 +86,18 @@ int Curl_socket_check(curl_socket_t readfd, curl_socket_t readfd2,
 #define SOCKET_WRITABLE(x,z) \
   Curl_socket_check(CURL_SOCKET_BAD, CURL_SOCKET_BAD, x, z)
 
-int Curl_poll(struct pollfd ufds[], unsigned int nfds, int timeout_ms);
-int Curl_wait_ms(int timeout_ms);
+int Curl_poll(struct pollfd ufds[], unsigned int nfds, timediff_t timeout_ms);
+int Curl_wait_ms(timediff_t timeout_ms);
 
 #ifdef TPF
 int tpf_select_libcurl(int maxfds, fd_set* reads, fd_set* writes,
-                       fd_set* excepts, struct timeval* tv);
+                       fd_set* excepts, struct timeval *tv);
 #endif
 
 /* Winsock and TPF sockets are not in range [0..FD_SETSIZE-1], which
    unfortunately makes it impossible for us to easily check if they're valid
 */
-#if defined(USE_WINSOCK) || defined(TPF)
+#if defined(USE_WINSOCK) || defined(TPF) || defined(FreeRTOS)
 #define VALID_SOCK(x) 1
 #define VERIFY_SOCK(x) Curl_nop_stmt
 #else

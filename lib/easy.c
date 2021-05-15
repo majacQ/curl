@@ -510,7 +510,7 @@ static CURLcode wait_or_timeout(struct Curl_multi *multi, struct events *ev)
     before = Curl_now();
 
     /* wait for activity or timeout */
-    pollrc = Curl_poll(fds, numfds, (int)ev->ms);
+    pollrc = Curl_poll(fds, numfds, ev->ms);
 
     after = Curl_now();
 
@@ -681,6 +681,7 @@ static CURLcode easy_perform(struct Curl_easy *data, bool events)
   mcode = curl_multi_add_handle(multi, data);
   if(mcode) {
     curl_multi_cleanup(multi);
+    data->multi_easy = NULL;
     if(mcode == CURLM_OUT_OF_MEMORY)
       return CURLE_OUT_OF_MEMORY;
     return CURLE_FAILED_INIT;
@@ -763,6 +764,7 @@ static CURLcode dupset(struct Curl_easy *dst, struct Curl_easy *src)
 {
   CURLcode result = CURLE_OK;
   enum dupstring i;
+  enum dupblob j;
 
   /* Copy src->set into dst->set first, then deal with the strings
      afterwards */
@@ -775,6 +777,16 @@ static CURLcode dupset(struct Curl_easy *dst, struct Curl_easy *src)
   /* duplicate all strings */
   for(i = (enum dupstring)0; i< STRING_LASTZEROTERMINATED; i++) {
     result = Curl_setstropt(&dst->set.str[i], src->set.str[i]);
+    if(result)
+      return result;
+  }
+
+  /* clear all blob pointers first */
+  memset(dst->set.blobs, 0, BLOB_LAST * sizeof(struct curl_blob *));
+  /* duplicate all blobs */
+  for(j = (enum dupblob)0; j < BLOB_LAST; j++) {
+    result = Curl_setblobopt(&dst->set.blobs[j], src->set.blobs[j]);
+    /* Curl_setstropt return CURLE_BAD_FUNCTION_ARGUMENT with blob */
     if(result)
       return result;
   }
@@ -817,9 +829,6 @@ struct Curl_easy *curl_easy_duphandle(struct Curl_easy *data)
    * the likeliness of us forgetting to init a buffer here in the future.
    */
   outcurl->set.buffer_size = data->set.buffer_size;
-  outcurl->state.buffer = malloc(outcurl->set.buffer_size + 1);
-  if(!outcurl->state.buffer)
-    goto fail;
 
   /* copy all userdefined values */
   if(dupset(outcurl, data))
@@ -829,8 +838,7 @@ struct Curl_easy *curl_easy_duphandle(struct Curl_easy *data)
 
   /* the connection cache is setup on demand */
   outcurl->state.conn_cache = NULL;
-
-  outcurl->state.lastconnect = NULL;
+  outcurl->state.lastconnect_id = -1;
 
   outcurl->progress.flags    = data->progress.flags;
   outcurl->progress.callback = data->progress.callback;
@@ -935,8 +943,6 @@ struct Curl_easy *curl_easy_duphandle(struct Curl_easy *data)
  */
 void curl_easy_reset(struct Curl_easy *data)
 {
-  long old_buffer_size = data->set.buffer_size;
-
   Curl_free_request_state(data);
 
   /* zero out UserDefined data: */
@@ -960,18 +966,6 @@ void curl_easy_reset(struct Curl_easy *data)
 #if !defined(CURL_DISABLE_HTTP) && !defined(CURL_DISABLE_CRYPTO_AUTH)
   Curl_http_auth_cleanup_digest(data);
 #endif
-
-  /* resize receive buffer */
-  if(old_buffer_size != data->set.buffer_size) {
-    char *newbuff = realloc(data->state.buffer, data->set.buffer_size + 1);
-    if(!newbuff) {
-      DEBUGF(fprintf(stderr, "Error: realloc of buffer failed\n"));
-      /* nothing we can do here except use the old size */
-      data->set.buffer_size = old_buffer_size;
-    }
-    else
-      data->state.buffer = newbuff;
-  }
 }
 
 /*

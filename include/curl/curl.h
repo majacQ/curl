@@ -54,9 +54,11 @@
 #include <osreldate.h>
 #endif
 
+#ifndef CURL_AVOID_SYS_TYPES_H
 /* The include stuff here below is mainly for time_t! */
 #include <sys/types.h>
 #include <time.h>
+#endif
 
 #if defined(CURL_WIN32) && !defined(_WIN32_WCE) && !defined(__CYGWIN__)
 #if !(defined(_WINSOCKAPI_) || defined(_WINSOCK_H) || \
@@ -79,11 +81,13 @@
 #include <sys/select.h>
 #endif
 
-#if !defined(CURL_WIN32) && !defined(_WIN32_WCE)
+#if !defined(CURL_WIN32) && !defined(_WIN32_WCE) &&  \
+  !defined(CURL_AVOID_SYS_SOCKET_H)
 #include <sys/socket.h>
 #endif
 
-#if !defined(CURL_WIN32) && !defined(__WATCOMC__) && !defined(__VXWORKS__)
+#if !defined(CURL_WIN32) && !defined(__WATCOMC__) && !defined(__VXWORKS__) && \
+  !defined(CURL_AVOID_SYS_TIME_H)
 #include <sys/time.h>
 #endif
 
@@ -130,7 +134,10 @@ typedef void CURLSH;
 
 #ifndef curl_socket_typedef
 /* socket typedef */
-#if defined(CURL_WIN32) && !defined(__LWIP_OPT_H__) && !defined(LWIP_HDR_OPT_H)
+#ifdef FreeRTOS
+typedef Socket_t curl_socket_t;
+#define CURL_SOCKET_BAD FREERTOS_INVALID_SOCKET
+#elif defined(CURL_WIN32) && !defined(__LWIP_OPT_H__) && !defined(LWIP_HDR_OPT_H)
 typedef SOCKET curl_socket_t;
 #define CURL_SOCKET_BAD INVALID_SOCKET
 #else
@@ -408,7 +415,7 @@ struct curl_sockaddr {
   unsigned int addrlen; /* addrlen was a socklen_t type before 7.18.0 but it
                            turned really ugly and painful on the systems that
                            lack this type */
-  struct sockaddr addr;
+  struct curl_struct_sockaddr addr;
 };
 
 typedef curl_socket_t
@@ -774,7 +781,7 @@ enum curl_khtype {
 };
 
 struct curl_khkey {
-  const char *key; /* points to a zero-terminated string encoded with base64
+  const char *key; /* points to a null-terminated string encoded with base64
                       if len is zero, otherwise to the "raw" data */
   size_t len;
   enum curl_khtype keytype;
@@ -950,6 +957,7 @@ typedef enum {
 #define CURLOPTTYPE_OBJECTPOINT   10000
 #define CURLOPTTYPE_FUNCTIONPOINT 20000
 #define CURLOPTTYPE_OFF_T         30000
+#define CURLOPTTYPE_BLOB          40000
 
 /* *STRINGPOINT is an alias for OBJECTPOINT to allow tools to extract the
    string options from the header file */
@@ -1445,7 +1453,7 @@ typedef enum {
   /* 132 OBSOLETE. Gone in 7.16.0 */
   /* 133 OBSOLETE. Gone in 7.16.0 */
 
-  /* zero terminated string for pass on to the FTP server when asked for
+  /* null-terminated string for pass on to the FTP server when asked for
      "account" info */
   CURLOPT(CURLOPT_FTP_ACCOUNT, CURLOPTTYPE_STRINGPOINT, 134),
 
@@ -1959,6 +1967,17 @@ typedef enum {
   /* allow RCPT TO command to fail for some recipients */
   CURLOPT(CURLOPT_MAIL_RCPT_ALLLOWFAILS, CURLOPTTYPE_LONG, 290),
 
+  /* the private SSL-certificate as a "blob" */
+  CURLOPT(CURLOPT_SSLCERT_BLOB, CURLOPTTYPE_BLOB, 291),
+  CURLOPT(CURLOPT_SSLKEY_BLOB, CURLOPTTYPE_BLOB, 292),
+  CURLOPT(CURLOPT_PROXY_SSLCERT_BLOB, CURLOPTTYPE_BLOB, 293),
+  CURLOPT(CURLOPT_PROXY_SSLKEY_BLOB, CURLOPTTYPE_BLOB, 294),
+  CURLOPT(CURLOPT_ISSUERCERT_BLOB, CURLOPTTYPE_BLOB, 295),
+
+  /* Issuer certificate for proxy */
+  CURLOPT(CURLOPT_PROXY_ISSUERCERT, CURLOPTTYPE_STRINGPOINT, 296),
+  CURLOPT(CURLOPT_PROXY_ISSUERCERT_BLOB, CURLOPTTYPE_BLOB, 297),
+
   CURLOPT_LASTENTRY /* the last unused */
 } CURLoption;
 
@@ -2106,7 +2125,7 @@ typedef enum {
   CURL_TIMECOND_LAST
 } curl_TimeCond;
 
-/* Special size_t value signaling a zero-terminated string. */
+/* Special size_t value signaling a null-terminated string. */
 #define CURL_ZERO_TERMINATED ((size_t) -1)
 
 /* curl_strequal() and curl_strnequal() are subject for removal in a future
@@ -2115,8 +2134,8 @@ CURL_EXTERN int curl_strequal(const char *s1, const char *s2);
 CURL_EXTERN int curl_strnequal(const char *s1, const char *s2, size_t n);
 
 /* Mime/form handling support. */
-typedef struct curl_mime_s      curl_mime;      /* Mime context. */
-typedef struct curl_mimepart_s  curl_mimepart;  /* Mime part context. */
+typedef struct curl_mime      curl_mime;      /* Mime context. */
+typedef struct curl_mimepart  curl_mimepart;  /* Mime part context. */
 
 /*
  * NAME curl_mime_init()
@@ -2490,10 +2509,11 @@ struct curl_slist {
  * subsequent attempt to change it will result in a CURLSSLSET_TOO_LATE.
  */
 
-typedef struct {
+struct curl_ssl_backend {
   curl_sslbackend id;
   const char *name;
-} curl_ssl_backend;
+};
+typedef struct curl_ssl_backend curl_ssl_backend;
 
 typedef enum {
   CURLSSLSET_OK = 0,
@@ -2621,10 +2641,6 @@ typedef enum {
   CURLINFO_PROXY_SSL_VERIFYRESULT = CURLINFO_LONG + 47,
   CURLINFO_PROTOCOL         = CURLINFO_LONG   + 48,
   CURLINFO_SCHEME           = CURLINFO_STRING + 49,
-  /* Fill in new entries below here! */
-
-  /* Preferably these would be defined conditionally based on the
-     sizeof curl_off_t being 64-bits */
   CURLINFO_TOTAL_TIME_T     = CURLINFO_OFF_T + 50,
   CURLINFO_NAMELOOKUP_TIME_T = CURLINFO_OFF_T + 51,
   CURLINFO_CONNECT_TIME_T   = CURLINFO_OFF_T + 52,
@@ -2633,8 +2649,9 @@ typedef enum {
   CURLINFO_REDIRECT_TIME_T  = CURLINFO_OFF_T + 55,
   CURLINFO_APPCONNECT_TIME_T = CURLINFO_OFF_T + 56,
   CURLINFO_RETRY_AFTER      = CURLINFO_OFF_T + 57,
+  CURLINFO_EFFECTIVE_METHOD = CURLINFO_STRING + 58,
 
-  CURLINFO_LASTONE          = 57
+  CURLINFO_LASTONE          = 58
 } CURLINFO;
 
 /* CURLINFO_RESPONSE_CODE is the new name for the option previously known as
@@ -2735,6 +2752,7 @@ typedef enum {
   CURLVERSION_FIFTH,
   CURLVERSION_SIXTH,
   CURLVERSION_SEVENTH,
+  CURLVERSION_EIGHTH,
   CURLVERSION_LAST /* never actually use this */
 } CURLversion;
 
@@ -2743,9 +2761,9 @@ typedef enum {
    meant to be a built-in version number for what kind of struct the caller
    expects. If the struct ever changes, we redefine the NOW to another enum
    from above. */
-#define CURLVERSION_NOW CURLVERSION_SEVENTH
+#define CURLVERSION_NOW CURLVERSION_EIGHTH
 
-typedef struct {
+struct curl_version_info_data {
   CURLversion age;          /* age of the returned struct */
   const char *version;      /* LIBCURL_VERSION */
   unsigned int version_num; /* LIBCURL_VERSION_NUM */
@@ -2789,7 +2807,13 @@ typedef struct {
   const char *capath;          /* the built-in default CURLOPT_CAPATH, might
                                   be NULL */
 
-} curl_version_info_data;
+  /* These fields were added in CURLVERSION_EIGHTH */
+  unsigned int zstd_ver_num; /* Numeric Zstd version
+                                  (MAJOR << 24) | (MINOR << 12) | PATCH */
+  const char *zstd_version; /* human readable string. */
+
+};
+typedef struct curl_version_info_data curl_version_info_data;
 
 #define CURL_VERSION_IPV6         (1<<0)  /* IPv6-enabled */
 #define CURL_VERSION_KERBEROS4    (1<<1)  /* Kerberos V4 auth is supported
@@ -2822,6 +2846,8 @@ typedef struct {
 #define CURL_VERSION_BROTLI       (1<<23) /* Brotli features are present. */
 #define CURL_VERSION_ALTSVC       (1<<24) /* Alt-Svc handling built-in */
 #define CURL_VERSION_HTTP3        (1<<25) /* HTTP3 support built-in */
+#define CURL_VERSION_ZSTD         (1<<26) /* zstd features are present */
+#define CURL_VERSION_UNICODE      (1<<27) /* Unicode support on Windows */
 
  /*
  * NAME curl_version_info()

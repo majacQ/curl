@@ -267,7 +267,7 @@ void Curl_failf(struct Curl_easy *data, const char *fmt, ...)
     size_t len;
     char error[CURL_ERROR_SIZE + 2];
     va_start(ap, fmt);
-    mvsnprintf(error, CURL_ERROR_SIZE, fmt, ap);
+    (void)mvsnprintf(error, CURL_ERROR_SIZE, fmt, ap);
     len = strlen(error);
 
     if(data->set.errorbuffer && !data->state.errorbuf) {
@@ -593,7 +593,7 @@ static CURLcode chop_write(struct connectdata *conn,
         return pausewrite(data, type, ptr, len);
       }
       if(wrote != chunklen) {
-        failf(data, "Failed writing body (%zu != %zu)", wrote, chunklen);
+        failf(data, "Failure writing output to destination");
         return CURLE_WRITE_ERROR;
       }
     }

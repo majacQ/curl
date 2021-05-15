@@ -91,11 +91,13 @@ fi
 
 if [ "$TRAVIS_OS_NAME" = linux -a "$QUICHE" ]; then
   cd $HOME
-  git clone --depth=1 https://github.com/cloudflare/quiche.git
+  git clone --depth=1 --recursive https://github.com/cloudflare/quiche.git
   curl https://sh.rustup.rs -sSf | sh -s -- -y
   source $HOME/.cargo/env
   cd $HOME/quiche
-  QUICHE_BSSL_PATH=$HOME/boringssl cargo build -v --release --features pkg-config-meta,qlog
+  cargo build -v --release --features pkg-config-meta,qlog
+  mkdir -v deps/boringssl/src/lib
+  ln -vnf $(find target/release -name libcrypto.a -o -name libssl.a) deps/boringssl/src/lib/
 fi
 
 # Install common libraries.
@@ -117,20 +119,22 @@ if [ $TRAVIS_OS_NAME = linux ]; then
   cd $HOME/wolfssl-4.4.0-stable
   sudo make install
 
-  if [ ! -e $HOME/mesalink-1.0.0/Makefile ]; then
-    cd $HOME
-    curl https://sh.rustup.rs -sSf | sh -s -- -y
-    source $HOME/.cargo/env
-    curl -LO https://github.com/mesalock-linux/mesalink/archive/v1.0.0.tar.gz
-    tar -xzf v1.0.0.tar.gz
-    cd mesalink-1.0.0
-    ./autogen.sh
-    ./configure --enable-tls13
-    make
-  fi
+  if [ "$MESALINK" = "yes" ]; then
+    if [ ! -e $HOME/mesalink-1.0.0/Makefile ]; then
+      cd $HOME
+      curl https://sh.rustup.rs -sSf | sh -s -- -y
+      source $HOME/.cargo/env
+      curl -LO https://github.com/mesalock-linux/mesalink/archive/v1.0.0.tar.gz
+      tar -xzf v1.0.0.tar.gz
+      cd mesalink-1.0.0
+      ./autogen.sh
+      ./configure --enable-tls13
+      make
+    fi
+    cd $HOME/mesalink-1.0.0
+    sudo make install
 
-  cd $HOME/mesalink-1.0.0
-  sudo make install
+  fi
 
   if [ ! -e $HOME/nghttp2-1.39.2/Makefile ]; then
     cd $HOME

@@ -36,6 +36,9 @@ CMAKE_DIST =                                    \
  CMake/FindLibSSH2.cmake                        \
  CMake/FindMbedTLS.cmake                        \
  CMake/FindNGHTTP2.cmake                        \
+ CMake/FindNGHTTP3.cmake                        \
+ CMake/FindNGTCP2.cmake                         \
+ CMake/FindQUICHE.cmake                         \
  CMake/FindWolfSSL.cmake                        \
  CMake/Macros.cmake                             \
  CMake/OtherTests.cmake                         \
@@ -175,7 +178,7 @@ PLAN9_DIST = plan9/include/mkfile \
  plan9/src/mkfile
 
 EXTRA_DIST = CHANGES COPYING maketgz Makefile.dist curl-config.in \
- RELEASE-NOTES buildconf libcurl.pc.in MacOSX-Framework \
+ TINY-RELEASE-NOTES RELEASE-NOTES buildconf libcurl.pc.in MacOSX-Framework \
  scripts/updatemanpages.pl $(CMAKE_DIST) \
  $(VC_DIST) $(WINBUILD_DIST) $(PLAN9_DIST) \
  lib/libcurl.vers.in buildconf.bat scripts/coverage.sh scripts/completion.pl

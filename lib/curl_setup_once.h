@@ -7,7 +7,7 @@
  *                            | (__| |_| |  _ <| |___
  *                             \___|\___/|_| \_\_____|
  *
- * Copyright (C) 1998 - 2019, Daniel Stenberg, <daniel@haxx.se>, et al.
+ * Copyright (C) 1998 - 2020, Daniel Stenberg, <daniel@haxx.se>, et al.
  *
  * This software is licensed as described in the file COPYING, which
  * you should have received as part of this distribution. The terms
@@ -130,7 +130,8 @@ struct timeval {
 #define sread(x,y,z) (ssize_t)read((RECV_TYPE_ARG1)(x), \
                                    (RECV_TYPE_ARG2)(y), \
                                    (RECV_TYPE_ARG3)(z))
-
+#elif defined(FreeRTOS)
+#define sread(a,b,c) FreeRTOS_recv(a,b,c,0)
 #elif defined(HAVE_RECV)
 /*
  * The definitions for the return type and arguments types
@@ -193,6 +194,9 @@ struct timeval {
   /* */
   Error Missing_definition_of_return_and_arguments_types_of_send
   /* */
+#elif defined(FreeRTOS)
+  /* The flags argument (4) marked as 'Not currently used' */
+#define swrite(a,b,c) FreeRTOS_send(a,b,c,0)
 #else
 #define swrite(x,y,z) (ssize_t)send((SEND_TYPE_ARG1)(x), \
                                     (SEND_QUAL_ARG2 SEND_TYPE_ARG2)(y), \
@@ -260,6 +264,8 @@ struct timeval {
 #  define sclose(x)  close_s((x))
 #elif defined(USE_LWIPSOCK)
 #  define sclose(x)  lwip_close((x))
+#elif defined(FreeRTOS)
+#  define sclose(x)  FreeRTOS_closesocket((x))
 #else
 #  define sclose(x)  close((x))
 #endif
@@ -481,6 +487,8 @@ typedef int sig_atomic_t;
 
 #ifdef __VMS
 #define argv_item_t  __char_ptr32
+#elif defined(_UNICODE)
+#define argv_item_t wchar_t *
 #else
 #define argv_item_t  char *
 #endif

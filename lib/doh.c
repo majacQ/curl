@@ -373,10 +373,10 @@ static CURLcode dohprobe(struct Curl_easy *data,
  * 'Curl_addrinfo *' with the address information.
  */
 
-Curl_addrinfo *Curl_doh(struct connectdata *conn,
-                        const char *hostname,
-                        int port,
-                        int *waitp)
+struct Curl_addrinfo *Curl_doh(struct connectdata *conn,
+                               const char *hostname,
+                               int port,
+                               int *waitp)
 {
   struct Curl_easy *data = conn->data;
   CURLcode result = CURLE_OK;
@@ -389,6 +389,7 @@ Curl_addrinfo *Curl_doh(struct connectdata *conn,
   /* start clean, consider allocating this struct on demand */
   memset(&data->req.doh, 0, sizeof(struct dohdata));
 
+  conn->bits.doh = TRUE;
   data->req.doh.host = hostname;
   data->req.doh.port = port;
   data->req.doh.headers =
@@ -790,18 +791,19 @@ static void showdoh(struct Curl_easy *data,
  * must be an associated call later to Curl_freeaddrinfo().
  */
 
-static Curl_addrinfo *
+static struct Curl_addrinfo *
 doh2ai(const struct dohentry *de, const char *hostname, int port)
 {
-  Curl_addrinfo *ai;
-  Curl_addrinfo *prevai = NULL;
-  Curl_addrinfo *firstai = NULL;
+  struct Curl_addrinfo *ai;
+  struct Curl_addrinfo *prevai = NULL;
+  struct Curl_addrinfo *firstai = NULL;
   struct sockaddr_in *addr;
 #ifdef ENABLE_IPV6
   struct sockaddr_in6 *addr6;
 #endif
   CURLcode result = CURLE_OK;
   int i;
+  size_t hostlen = strlen(hostname) + 1; /* include zero terminator */
 
   if(!de)
     /* no input == no output! */
@@ -824,24 +826,14 @@ doh2ai(const struct dohentry *de, const char *hostname, int port)
       addrtype = AF_INET;
     }
 
-    ai = calloc(1, sizeof(Curl_addrinfo));
+    ai = calloc(1, sizeof(struct Curl_addrinfo) + ss_size + hostlen);
     if(!ai) {
       result = CURLE_OUT_OF_MEMORY;
       break;
     }
-    ai->ai_canonname = strdup(hostname);
-    if(!ai->ai_canonname) {
-      result = CURLE_OUT_OF_MEMORY;
-      free(ai);
-      break;
-    }
-    ai->ai_addr = calloc(1, ss_size);
-    if(!ai->ai_addr) {
-      result = CURLE_OUT_OF_MEMORY;
-      free(ai->ai_canonname);
-      free(ai);
-      break;
-    }
+    ai->ai_addr = (void *)((char *)ai + sizeof(struct Curl_addrinfo));
+    ai->ai_canonname = (void *)((char *)ai->ai_addr + ss_size);
+    memcpy(ai->ai_canonname, hostname, hostlen);
 
     if(!firstai)
       /* store the pointer we want to return from this function */
@@ -866,7 +858,7 @@ doh2ai(const struct dohentry *de, const char *hostname, int port)
       addr = (void *)ai->ai_addr; /* storage area for this info */
       DEBUGASSERT(sizeof(struct in_addr) == sizeof(de->addr[i].ip.v4));
       memcpy(&addr->sin_addr, &de->addr[i].ip.v4, sizeof(struct in_addr));
-      addr->sin_family = (CURL_SA_FAMILY_T)addrtype;
+      addr->sin_family = addrtype;
       addr->sin_port = htons((unsigned short)port);
       break;
 
@@ -875,7 +867,7 @@ doh2ai(const struct dohentry *de, const char *hostname, int port)
       addr6 = (void *)ai->ai_addr; /* storage area for this info */
       DEBUGASSERT(sizeof(struct in6_addr) == sizeof(de->addr[i].ip.v6));
       memcpy(&addr6->sin6_addr, &de->addr[i].ip.v6, sizeof(struct in6_addr));
-      addr6->sin6_family = (CURL_SA_FAMILY_T)addrtype;
+      addr6->sin6_family = addrtype;
       addr6->sin6_port = htons((unsigned short)port);
       break;
 #endif

@@ -50,6 +50,7 @@ EXTRA_DIST =                                    \
  CIPHERS.md                                     \
  CMakeLists.txt                                 \
  CODE_OF_CONDUCT.md                             \
+ CODE_REVIEW.md                                 \
  CODE_STYLE.md                                  \
  CONTRIBUTE.md                                  \
  CURL-DISABLE.md                                \
@@ -60,6 +61,7 @@ EXTRA_DIST =                                    \
  FAQ                                            \
  FEATURES                                       \
  GOVERNANCE.md                                  \
+ GPLv3.txt                                      \
  HELP-US.md                                     \
  HISTORY.md                                     \
  HTTP-COOKIES.md                                \
@@ -73,6 +75,7 @@ EXTRA_DIST =                                    \
  LICENSE-MIXING.md                              \
  MAIL-ETIQUETTE                                 \
  MQTT.md                                        \
+ options-in-versions                            \
  PARALLEL-TRANSFERS.md                          \
  README.md                                      \
  RELEASE-PROCEDURE.md                           \
@@ -82,6 +85,7 @@ EXTRA_DIST =                                    \
  SSL-PROBLEMS.md                                \
  SSLCERTS.md                                    \
  THANKS                                         \
+ TINY-CURL.md                                   \
  TODO                                           \
  TheArtOfHttpScripting                          \
  VERSIONS.md

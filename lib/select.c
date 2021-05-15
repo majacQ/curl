@@ -55,9 +55,6 @@
 #include "timeval.h"
 #include "warnless.h"
 
-/* Convenience local macros */
-#define ELAPSED_MS() (int)Curl_timediff(Curl_now(), initial_tv)
-
 /*
  * Internal function used for waiting a specific amount of ms
  * in Curl_socket_check() and Curl_poll() when no file descriptor
@@ -74,7 +71,7 @@
  *   -1 = system call error, invalid timeout value, or interrupted
  *    0 = specified timeout has elapsed
  */
-int Curl_wait_ms(int timeout_ms)
+int Curl_wait_ms(timediff_t timeout_ms)
 {
   int r = 0;
 
@@ -86,16 +83,44 @@ int Curl_wait_ms(int timeout_ms)
   }
 #if defined(MSDOS)
   delay(timeout_ms);
-#elif defined(USE_WINSOCK)
-  Sleep(timeout_ms);
+#elif defined(WIN32)
+  /* prevent overflow, timeout_ms is typecast to ULONG/DWORD. */
+#if TIMEDIFF_T_MAX >= ULONG_MAX
+  if(timeout_ms >= ULONG_MAX)
+    timeout_ms = ULONG_MAX-1;
+    /* don't use ULONG_MAX, because that is equal to INFINITE */
+#endif
+  Sleep((ULONG)timeout_ms);
 #else
 #if defined(HAVE_POLL_FINE)
-  r = poll(NULL, 0, timeout_ms);
+  /* prevent overflow, timeout_ms is typecast to int. */
+#if TIMEDIFF_T_MAX > INT_MAX
+  if(timeout_ms > INT_MAX)
+    timeout_ms = INT_MAX;
+#endif
+  r = poll(NULL, 0, (int)timeout_ms);
 #else
   {
     struct timeval pending_tv;
-    pending_tv.tv_sec = timeout_ms / 1000;
-    pending_tv.tv_usec = (timeout_ms % 1000) * 1000;
+    timediff_t tv_sec = timeout_ms / 1000;
+    timediff_t tv_usec = (timeout_ms % 1000) * 1000; /* max=999999 */
+#ifdef HAVE_SUSECONDS_T
+#if TIMEDIFF_T_MAX > TIME_T_MAX
+    /* tv_sec overflow check in case time_t is signed */
+    if(tv_sec > TIME_T_MAX)
+      tv_sec = TIME_T_MAX;
+#endif
+    pending_tv.tv_sec = (time_t)tv_sec;
+    pending_tv.tv_usec = (suseconds_t)tv_usec;
+#else
+#if TIMEDIFF_T_MAX > INT_MAX
+    /* tv_sec overflow check in case time_t is signed */
+    if(tv_sec > INT_MAX)
+      tv_sec = INT_MAX;
+#endif
+    pending_tv.tv_sec = (int)tv_sec;
+    pending_tv.tv_usec = (int)tv_usec;
+#endif
     r = select(0, NULL, NULL, NULL, &pending_tv);
   }
 #endif /* HAVE_POLL_FINE */
@@ -116,44 +141,60 @@ int Curl_wait_ms(int timeout_ms)
  *    0 = timeout
  *    N = number of signalled file descriptors
  */
-int Curl_select(curl_socket_t maxfd,
-                fd_set *fds_read,
-                fd_set *fds_write,
-                fd_set *fds_err,
-                time_t timeout_ms)     /* milliseconds to wait */
+int Curl_select(curl_socket_t maxfd,   /* highest socket number */
+                curl_fd_set *fds_read,      /* sockets ready for reading */
+                curl_fd_set *fds_write,     /* sockets ready for writing */
+                curl_fd_set *fds_err,       /* sockets with errors */
+                timediff_t timeout_ms) /* milliseconds to wait */
 {
   struct timeval pending_tv;
   struct timeval *ptimeout;
-  int pending_ms;
   int r;
-
-#if SIZEOF_TIME_T != SIZEOF_INT
-  /* wrap-around precaution */
-  if(timeout_ms >= INT_MAX)
-    timeout_ms = INT_MAX;
-#endif
 
 #ifdef USE_WINSOCK
   /* WinSock select() can't handle zero events.  See the comment below. */
   if((!fds_read || fds_read->fd_count == 0) &&
      (!fds_write || fds_write->fd_count == 0) &&
      (!fds_err || fds_err->fd_count == 0)) {
-    r = Curl_wait_ms((int)timeout_ms);
+    r = Curl_wait_ms(timeout_ms);
     return r;
   }
 #endif
 
   ptimeout = &pending_tv;
-
   if(timeout_ms < 0) {
     ptimeout = NULL;
   }
   else if(timeout_ms > 0) {
-    pending_ms = (int)timeout_ms;
-    pending_tv.tv_sec = pending_ms / 1000;
-    pending_tv.tv_usec = (pending_ms % 1000) * 1000;
+    timediff_t tv_sec = timeout_ms / 1000;
+    timediff_t tv_usec = (timeout_ms % 1000) * 1000; /* max=999999 */
+#ifdef HAVE_SUSECONDS_T
+#if TIMEDIFF_T_MAX > TIME_T_MAX
+    /* tv_sec overflow check in case time_t is signed */
+    if(tv_sec > TIME_T_MAX)
+      tv_sec = TIME_T_MAX;
+#endif
+    pending_tv.tv_sec = (time_t)tv_sec;
+    pending_tv.tv_usec = (suseconds_t)tv_usec;
+#elif defined(WIN32) /* maybe also others in the future */
+#if TIMEDIFF_T_MAX > LONG_MAX
+    /* tv_sec overflow check on Windows there we know it is long */
+    if(tv_sec > LONG_MAX)
+      tv_sec = LONG_MAX;
+#endif
+    pending_tv.tv_sec = (long)tv_sec;
+    pending_tv.tv_usec = (long)tv_usec;
+#else
+#if TIMEDIFF_T_MAX > INT_MAX
+    /* tv_sec overflow check in case time_t is signed */
+    if(tv_sec > INT_MAX)
+      tv_sec = INT_MAX;
+#endif
+    pending_tv.tv_sec = (int)tv_sec;
+    pending_tv.tv_usec = (int)tv_usec;
+#endif
   }
-  else if(!timeout_ms) {
+  else {
     pending_tv.tv_sec = 0;
     pending_tv.tv_usec = 0;
   }
@@ -174,6 +215,13 @@ int Curl_select(curl_socket_t maxfd,
              fds_read && fds_read->fd_count ? fds_read : NULL,
              fds_write && fds_write->fd_count ? fds_write : NULL,
              fds_err && fds_err->fd_count ? fds_err : NULL, ptimeout);
+#elif defined(FreeRTOS)
+  {
+    /* convert the timeout to FreeRTOS ticks */
+    TickType_t ticks = ptimeout ? ptimeout->tv_sec * configTICK_RATE_HZ : +
+      (ptimeout->tv_usec * configTICK_RATE_HZ) / 1000000;
+    r = FreeRTOS_select(fds_read, ticks);
+  }
 #else
   r = select((int)maxfd + 1, fds_read, fds_write, fds_err, ptimeout);
 #endif
@@ -204,35 +252,26 @@ int Curl_select(curl_socket_t maxfd,
 int Curl_socket_check(curl_socket_t readfd0, /* two sockets to read from */
                       curl_socket_t readfd1,
                       curl_socket_t writefd, /* socket to write to */
-                      timediff_t timeout_ms)     /* milliseconds to wait */
+                      timediff_t timeout_ms) /* milliseconds to wait */
 {
 #ifdef HAVE_POLL_FINE
   struct pollfd pfd[3];
-  int pending_ms;
   int num;
 #else
-  fd_set fds_read;
-  fd_set fds_write;
-  fd_set fds_err;
+  struct timeval pending_tv;
+  struct timeval *ptimeout;
+  curl_fd_set fds_read;
+  curl_fd_set fds_write;
+  curl_fd_set fds_err;
   curl_socket_t maxfd;
 #endif
   int r;
   int ret;
 
-  /* prevent overflow. timeout_ms is typecast to time_t and int. */
-#if TIMEDIFF_T_MAX > INT_MAX
-  if(timeout_ms > INT_MAX)
-    timeout_ms = INT_MAX;
-#endif
-#if INT_MAX > TIME_T_MAX
-  if(timeout_ms > (int)TIME_T_MAX)
-    timeout_ms = (int)TIME_T_MAX;
-#endif
-
   if((readfd0 == CURL_SOCKET_BAD) && (readfd1 == CURL_SOCKET_BAD) &&
      (writefd == CURL_SOCKET_BAD)) {
     /* no sockets, just wait */
-    r = Curl_wait_ms((int)timeout_ms);
+    r = Curl_wait_ms(timeout_ms);
     return r;
   }
 
@@ -263,18 +302,9 @@ int Curl_socket_check(curl_socket_t readfd0, /* two sockets to read from */
     num++;
   }
 
-  if(timeout_ms > 0)
-    pending_ms = (int)timeout_ms;
-  else if(timeout_ms < 0)
-    pending_ms = -1;
-  else
-    pending_ms = 0;
-  r = poll(pfd, num, pending_ms);
-
-  if(r < 0)
-    return -1;
-  if(r == 0)
-    return 0;
+  r = Curl_poll(pfd, num, timeout_ms);
+  if(r <= 0)
+    return r;
 
   ret = 0;
   num = 0;
@@ -300,6 +330,19 @@ int Curl_socket_check(curl_socket_t readfd0, /* two sockets to read from */
   }
 
   return ret;
+
+#else  /* HAVE_POLL_FINE */
+
+#if defined(FreeRTOS)
+  /* using its weirdo select() */
+  fds_read = FreeRTOS_CreateSocketSet();
+  maxfd = (curl_socket_t)-1;
+  if(readfd0 != CURL_SOCKET_BAD)
+    CURL_FD_SET(readfd0, &fds_read, eSELECT_READ);
+  if(readfd1 != CURL_SOCKET_BAD)
+    CURL_FD_SET(readfd1, &fds_read, eSELECT_READ);
+  if(writefd != CURL_SOCKET_BAD)
+    CURL_FD_SET(writefd, &fds_read, eSELECT_WRITE);
 
 #else  /* HAVE_POLL_FINE */
 
@@ -329,6 +372,7 @@ int Curl_socket_check(curl_socket_t readfd0, /* two sockets to read from */
     if(writefd > maxfd)
       maxfd = writefd;
   }
+#endif
 
   /* We know that we have at least one bit set in at least two fd_sets in
      this case, but we may have no bits set in either fds_read or fd_write,
@@ -340,7 +384,7 @@ int Curl_socket_check(curl_socket_t readfd0, /* two sockets to read from */
      curl_socket_t is unsigned in such cases and thus -1 is the largest
      value).
   */
-  r = Curl_select(maxfd, &fds_read, &fds_write, &fds_err, (time_t)timeout_ms);
+  r = Curl_select(maxfd, &fds_read, &fds_write, &fds_err, timeout_ms);
 
   if(r < 0)
     return -1;
@@ -348,6 +392,16 @@ int Curl_socket_check(curl_socket_t readfd0, /* two sockets to read from */
     return 0;
 
   ret = 0;
+#ifdef FreeRTOS
+  if(r) {
+    if((readfd0 != CURL_SOCKET_BAD) && FreeRTOS_FD_ISSET(readfd0, fds_read))
+      ret |= CURL_CSELECT_IN;
+    if((readfd1 != CURL_SOCKET_BAD) && FreeRTOS_FD_ISSET(readfd1, fds_read))
+      ret |= CURL_CSELECT_IN2;
+    if((writefd != CURL_SOCKET_BAD) && FreeRTOS_FD_ISSET(writefd, fds_read))
+      ret |= CURL_CSELECT_OUT;
+  }
+#else
   if(readfd0 != CURL_SOCKET_BAD) {
     if(FD_ISSET(readfd0, &fds_read))
       ret |= CURL_CSELECT_IN;
@@ -366,11 +420,11 @@ int Curl_socket_check(curl_socket_t readfd0, /* two sockets to read from */
     if(FD_ISSET(writefd, &fds_err))
       ret |= CURL_CSELECT_ERR;
   }
+#endif
 
   return ret;
 
 #endif  /* HAVE_POLL_FINE */
-
 }
 
 /*
@@ -386,16 +440,16 @@ int Curl_socket_check(curl_socket_t readfd0, /* two sockets to read from */
  *    0 = timeout
  *    N = number of structures with non zero revent fields
  */
-int Curl_poll(struct pollfd ufds[], unsigned int nfds, int timeout_ms)
+int Curl_poll(struct pollfd ufds[], unsigned int nfds, timediff_t timeout_ms)
 {
 #ifdef HAVE_POLL_FINE
   int pending_ms;
 #else
-  fd_set fds_read;
-  fd_set fds_write;
-  fd_set fds_err;
-  curl_socket_t maxfd;
+  curl_fd_set fds_read;
+  curl_fd_set fds_write;
+  curl_fd_set fds_err;
 #endif
+  curl_socket_t maxfd;
   bool fds_none = TRUE;
   unsigned int i;
   int r;
@@ -409,6 +463,7 @@ int Curl_poll(struct pollfd ufds[], unsigned int nfds, int timeout_ms)
     }
   }
   if(fds_none) {
+    /* no sockets, just wait */
     r = Curl_wait_ms(timeout_ms);
     return r;
   }
@@ -419,9 +474,8 @@ int Curl_poll(struct pollfd ufds[], unsigned int nfds, int timeout_ms)
      value indicating a blocking call should be performed. */
 
 #ifdef HAVE_POLL_FINE
-
   if(timeout_ms > 0)
-    pending_ms = timeout_ms;
+    pending_ms = (int)timeout_ms;
   else if(timeout_ms < 0)
     pending_ms = -1;
   else
@@ -444,6 +498,26 @@ int Curl_poll(struct pollfd ufds[], unsigned int nfds, int timeout_ms)
 
 #else  /* HAVE_POLL_FINE */
 
+#ifdef FreeRTOS
+  fds_read = FreeRTOS_CreateSocketSet();
+  maxfd = (curl_socket_t)-1;
+
+  for(i = 0; i < nfds; i++) {
+    ufds[i].revents = 0;
+    if(ufds[i].fd == CURL_SOCKET_BAD)
+      continue;
+    VERIFY_SOCK(ufds[i].fd);
+    if(ufds[i].events & (POLLIN|POLLOUT|POLLPRI|
+                          POLLRDNORM|POLLWRNORM|POLLRDBAND)) {
+      if(ufds[i].fd > maxfd)
+        maxfd = ufds[i].fd;
+      if(ufds[i].events & (POLLRDNORM|POLLIN))
+        CURL_FD_SET(ufds[i].fd, &fds_read, eSELECT_READ);
+      if(ufds[i].events & (POLLWRNORM|POLLOUT))
+        CURL_FD_SET(ufds[i].fd, &fds_read, eSELECT_WRITE);
+    }
+  }
+#else
   FD_ZERO(&fds_read);
   FD_ZERO(&fds_write);
   FD_ZERO(&fds_err);
@@ -466,6 +540,7 @@ int Curl_poll(struct pollfd ufds[], unsigned int nfds, int timeout_ms)
         FD_SET(ufds[i].fd, &fds_err);
     }
   }
+#endif
 
   r = Curl_select(maxfd, &fds_read, &fds_write, &fds_err, timeout_ms);
 
@@ -479,12 +554,19 @@ int Curl_poll(struct pollfd ufds[], unsigned int nfds, int timeout_ms)
     ufds[i].revents = 0;
     if(ufds[i].fd == CURL_SOCKET_BAD)
       continue;
+#ifdef FreeRTOS
+    if((ufds[i].events & POLLIN) && FreeRTOS_FD_ISSET(ufds[i].fd, fds_read))
+      ufds[i].revents |= POLLIN;
+    if((ufds[i].events & POLLOUT) && FreeRTOS_FD_ISSET(ufds[i].fd, fds_read))
+      ufds[i].revents |= POLLOUT;
+#else
     if(FD_ISSET(ufds[i].fd, &fds_read))
       ufds[i].revents |= POLLIN;
     if(FD_ISSET(ufds[i].fd, &fds_write))
       ufds[i].revents |= POLLOUT;
     if(FD_ISSET(ufds[i].fd, &fds_err))
       ufds[i].revents |= POLLPRI;
+#endif
     if(ufds[i].revents != 0)
       r++;
   }
